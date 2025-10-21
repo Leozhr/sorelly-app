@@ -11,7 +11,16 @@ import {
   removeSessionsByUser,
   removeVerification,
   upsertVerification,
+  type EnsureUserProfile,
+  type UserRecord,
 } from "../utils";
+import { sendVerificationEmail } from "@/lib/email";
+
+type ResellerRecord = {
+  id?: string | number;
+  nome?: string | null;
+  nome_fantasia?: string | null;
+};
 
 export async function POST(req: Request) {
   try {
@@ -37,20 +46,54 @@ export async function POST(req: Request) {
       );
     }
 
-    const user = await ensureUser(email);
+    const resellerProfile = await fetchResellerByEmail(email);
+
+    if (!resellerProfile) {
+      return NextResponse.json(
+        {
+          error: "Nenhuma revendedora encontrada para o email informado.",
+        },
+        { status: 404 },
+      );
+    }
+
+    let user!: UserRecord;
+    try {
+      user = await ensureUser(email, resellerProfile);
+    } catch (syncError) {
+      return NextResponse.json(
+        {
+          error: "Não foi possível sincronizar o usuário com a base de dados.",
+          details:
+            syncError instanceof Error
+              ? syncError.message
+              : String(syncError),
+        },
+        { status: 409 },
+      );
+    }
 
     if (!code) {
       const token = generateVerificationCode();
       const verification = await upsertVerification(user.id, token);
 
+      await sendVerificationEmail(user.email, token);
+
       return NextResponse.json(
         {
-          message:
-            "Código gerado com sucesso. (Simulação: nenhum email enviado) Utilize-o para confirmar o acesso.",
-          user,
-          verification: {
-            code: verification.token,
-            expiresAt: verification.expiresAt,
+          message: "Código enviado para o email informado.",
+          ...(process.env.NODE_ENV !== "production"
+            ? {
+                debug: {
+                  code: verification.token,
+                  expiresAt: verification.expiresAt,
+                },
+              }
+            : {}),
+          user: {
+            id: user.id,
+            name: user.name,
+            email: user.email,
           },
         },
         { status: 200 },
@@ -117,4 +160,70 @@ export async function POST(req: Request) {
       { status: 500 },
     );
   }
+}
+
+async function fetchResellerByEmail(
+  email: string,
+): Promise<EnsureUserProfile | null> {
+  const apiToken = process.env.DEVMASTER_API_KEY;
+
+  if (!apiToken) {
+    throw new Error(
+      "Variável de ambiente DEVMASTER_API_KEY não configurada.",
+    );
+  }
+
+  const url = `http://portalvps250.indepinfo.com.br:28575/appsorelly/revendedoras/email=${encodeURIComponent(email)}`;
+  const response = await fetch(url, {
+    headers: { Token: apiToken },
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    if (response.status === 404) {
+      return null;
+    }
+
+    throw new Error(
+      `Falha ao consultar a API externa (${response.status}).`,
+    );
+  }
+
+  const payload = (await response.json()) as unknown;
+
+  if (!Array.isArray(payload) || payload.length === 0) {
+    return null;
+  }
+
+  const record = payload[0] as ResellerRecord;
+  const numericId = parseResellerId(record.id);
+
+  if (numericId === null) {
+    throw new Error("A API externa retornou um ID inválido para a revendedora.");
+  }
+
+  const name =
+    typeof record.nome_fantasia === "string" && record.nome_fantasia.trim().length > 0
+      ? record.nome_fantasia.trim()
+      : typeof record.nome === "string" && record.nome.trim().length > 0
+        ? record.nome.trim()
+        : null;
+
+  return {
+    id: numericId,
+    name,
+  };
+}
+
+function parseResellerId(rawId: ResellerRecord["id"]): number | null {
+  if (typeof rawId === "number") {
+    return Number.isFinite(rawId) ? rawId : null;
+  }
+
+  if (typeof rawId === "string" && rawId.trim().length > 0) {
+    const value = Number.parseInt(rawId.trim(), 10);
+    return Number.isNaN(value) ? null : value;
+  }
+
+  return null;
 }

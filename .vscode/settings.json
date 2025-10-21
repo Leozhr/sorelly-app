@@ -1,0 +1,5 @@
+{
+  "chatgpt.openOnStartup": true,
+  "editor.cursorBlinking": "blink",
+  "editor.cursorSmoothCaretAnimation": "on"
+}
