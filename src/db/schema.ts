@@ -30,9 +30,21 @@ export const sessionsTable = pgTable("sessions", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+export const clientsTable = pgTable("clients", {
+  id: integer().primaryKey().generatedAlwaysAsIdentity(),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => usersTable.id, { onDelete: "cascade" }),
+  name: varchar({ length: 255 }).notNull(),
+  phone: varchar({ length: 32 }).notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().$onUpdate(() => new Date()),
+});
+
 export const usersRelations = relations(usersTable, ({ many }) => ({
   sessions: many(sessionsTable),
   verifications: many(verificationTable),
+  clients: many(clientsTable),
 }));
 
 export const verificationRelations = relations(verificationTable, ({ one }) => ({
@@ -45,6 +57,13 @@ export const verificationRelations = relations(verificationTable, ({ one }) => (
 export const sessionsRelations = relations(sessionsTable, ({ one }) => ({
   user: one(usersTable, {
     fields: [sessionsTable.userId],
+    references: [usersTable.id],
+  }),
+}));
+
+export const clientsRelations = relations(clientsTable, ({ one }) => ({
+  user: one(usersTable, {
+    fields: [clientsTable.userId],
     references: [usersTable.id],
   }),
 }));
