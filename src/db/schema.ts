@@ -37,6 +37,7 @@ export const clientsTable = pgTable("clients", {
     .references(() => usersTable.id, { onDelete: "cascade" }),
   name: varchar({ length: 255 }).notNull(),
   phone: varchar({ length: 32 }).notNull(),
+  whatsApp: varchar({ length: 32 }).notNull(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().$onUpdate(() => new Date()),
 });

@@ -135,6 +135,7 @@ export async function POST(req: Request) {
       typeof body.phone === "string"
         ? body.phone.trim()
         : "";
+    const phoneForLink = phone.replace(/\D/g, "");
 
     if (!name) {
       return NextResponse.json(
@@ -150,12 +151,23 @@ export async function POST(req: Request) {
       );
     }
 
+    if (!phoneForLink) {
+      return NextResponse.json(
+        {
+          error:
+            "Informe um telefone utilizando ao menos um dígito numérico válido.",
+        },
+        { status: 400 },
+      );
+    }
+
     const [client] = await db
       .insert(clientsTable)
       .values({
         userId: user.id,
         name,
         phone,
+        whatsApp: `https://wa.me/${phoneForLink}`,
       })
       .returning();
 

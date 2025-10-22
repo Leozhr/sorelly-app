@@ -2,13 +2,98 @@ import { NextResponse } from "next/server";
 
 import { db } from "@/db";
 import { clientsTable } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
+import { getSessionByToken, getUserById } from "../../auth/utils";
 
 type RouteParams = {
   params: {
     id: string;
   };
 };
+
+export async function GET(req: Request, { params }: RouteParams) {
+  try {
+    const clientId = parseClientId(params.id);
+
+    if (!clientId) {
+      return NextResponse.json(
+        { error: "Informe um identificador válido para o cliente." },
+        { status: 400 },
+      );
+    }
+
+    const authHeader = req.headers.get("authorization");
+
+    if (!authHeader || !authHeader.toLowerCase().startsWith("bearer ")) {
+      return NextResponse.json(
+        { error: "Sessão inválida. Informe o token no header Authorization." },
+        { status: 401 },
+      );
+    }
+
+    const sessionToken = authHeader.slice(7).trim();
+
+    if (!sessionToken) {
+      return NextResponse.json(
+        { error: "Sessão inválida. Token ausente no header Authorization." },
+        { status: 401 },
+      );
+    }
+
+    const session = await getSessionByToken(sessionToken);
+
+    if (!session) {
+      return NextResponse.json(
+        { error: "Sessão inválida ou inexistente." },
+        { status: 401 },
+      );
+    }
+
+    if (session.expiresAt && session.expiresAt.getTime() <= Date.now()) {
+      return NextResponse.json(
+        { error: "Sessão expirada. Faça login novamente." },
+        { status: 401 },
+      );
+    }
+
+    const user = await getUserById(session.userId);
+
+    if (!user) {
+      return NextResponse.json(
+        {
+          error:
+            "Usuário vinculado à sessão não foi encontrado. Solicite uma nova sessão.",
+        },
+        { status: 500 },
+      );
+    }
+
+    const [client] = await db
+      .select()
+      .from(clientsTable)
+      .where(
+        and(eq(clientsTable.id, clientId), eq(clientsTable.userId, user.id)),
+      )
+      .limit(1);
+
+    if (!client) {
+      return NextResponse.json(
+        { error: "Cliente não encontrado." },
+        { status: 404 },
+      );
+    }
+
+    return NextResponse.json({ client }, { status: 200 });
+  } catch (error) {
+    return NextResponse.json(
+      {
+        error: "Não foi possível buscar o cliente.",
+        details: error instanceof Error ? error.message : String(error),
+      },
+      { status: 500 },
+    );
+  }
+}
 
 export async function PATCH(req: Request, { params }: RouteParams) {
   try {
@@ -61,6 +146,19 @@ export async function PATCH(req: Request, { params }: RouteParams) {
       }
 
       payload.phone = phone;
+      const digitsOnly = phone.replace(/\D/g, "");
+
+      if (!digitsOnly) {
+        return NextResponse.json(
+          {
+            error:
+              "Informe um telefone utilizando ao menos um dígito numérico válido.",
+          },
+          { status: 400 },
+        );
+      }
+
+      payload.whatsApp = `https://wa.me/${digitsOnly}`;
     }
 
     if (Object.keys(payload).length === 0) {
