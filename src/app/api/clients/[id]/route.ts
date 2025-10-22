@@ -1,19 +1,20 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
 import { db } from "@/db";
 import { clientsTable } from "@/db/schema";
 import { and, eq } from "drizzle-orm";
 import { getSessionByToken, getUserById } from "../../auth/utils";
 
-type RouteParams = {
-  params: {
+type ClientRouteContext = {
+  params: Promise<{
     id: string;
-  };
+  }>;
 };
 
-export async function GET(req: Request, { params }: RouteParams) {
+export async function GET(req: NextRequest, context: ClientRouteContext) {
   try {
-    const clientId = parseClientId(params.id);
+    const { id } = await context.params;
+    const clientId = parseClientId(id);
 
     if (!clientId) {
       return NextResponse.json(
@@ -95,9 +96,10 @@ export async function GET(req: Request, { params }: RouteParams) {
   }
 }
 
-export async function PATCH(req: Request, { params }: RouteParams) {
+export async function PATCH(req: NextRequest, context: ClientRouteContext) {
   try {
-    const clientId = parseClientId(params.id);
+    const { id } = await context.params;
+    const clientId = parseClientId(id);
 
     if (!clientId) {
       return NextResponse.json(
@@ -199,9 +201,13 @@ export async function PATCH(req: Request, { params }: RouteParams) {
   }
 }
 
-export async function DELETE(_req: Request, { params }: RouteParams) {
+export async function DELETE(
+  _req: NextRequest,
+  context: ClientRouteContext,
+) {
   try {
-    const clientId = parseClientId(params.id);
+    const { id } = await context.params;
+    const clientId = parseClientId(id);
 
     if (!clientId) {
       return NextResponse.json(
