@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { getUserByEmail } from "../utils";
+import { getSessionByToken, getUserByEmail, getUserById } from "../utils";
 
 export async function POST(req: Request) {
   try {
@@ -13,12 +13,60 @@ export async function POST(req: Request) {
       );
     }
 
+    const sessionToken =
+      typeof body.sessionToken === "string" ? body.sessionToken.trim() : "";
     const email = typeof body.email === "string" ? body.email.trim() : "";
 
-    if (!email) {
+    if (!sessionToken && !email) {
       return NextResponse.json(
-        { error: "É necessário informar um email válido." },
+        {
+          error:
+            "Informe um sessionToken válido ou o email para buscar a sessão.",
+        },
         { status: 400 },
+      );
+    }
+
+    if (sessionToken) {
+      const session = await getSessionByToken(sessionToken);
+
+      if (!session) {
+        return NextResponse.json(
+          { error: "Sessão inválida ou inexistente." },
+          { status: 401 },
+        );
+      }
+
+      if (session.expiresAt && session.expiresAt.getTime() <= Date.now()) {
+        return NextResponse.json(
+          { error: "Sessão expirada. Faça login novamente." },
+          { status: 401 },
+        );
+      }
+
+      const user = await getUserById(session.userId);
+
+      if (!user) {
+        return NextResponse.json(
+          {
+            error:
+              "Usuário associado à sessão não foi encontrado. Solicite uma nova sessão.",
+          },
+          { status: 500 },
+        );
+      }
+
+      return NextResponse.json(
+        {
+          message: "Sessão válida.",
+          user,
+          session: {
+            token: session.sessionToken,
+            expiresAt: session.expiresAt,
+            createdAt: session.createdAt,
+          },
+        },
+        { status: 200 },
       );
     }
 

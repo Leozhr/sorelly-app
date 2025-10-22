@@ -20,6 +20,16 @@ export async function getUserByEmail(email: string) {
   return user as UserRecord | undefined;
 }
 
+export async function getUserById(id: number) {
+  const [user] = await db
+    .select()
+    .from(usersTable)
+    .where(eq(usersTable.id, id))
+    .limit(1);
+
+  return user as UserRecord | undefined;
+}
+
 export async function ensureUser(email: string, profile?: EnsureUserProfile) {
   const existing = await getUserByEmail(email);
 
@@ -115,4 +125,14 @@ export async function createSession(userId: number, sessionToken: string) {
 
 export async function removeSessionsByUser(userId: number) {
   await db.delete(sessionsTable).where(eq(sessionsTable.userId, userId));
+}
+
+export async function getSessionByToken(sessionToken: string) {
+  const [session] = await db
+    .select()
+    .from(sessionsTable)
+    .where(eq(sessionsTable.sessionToken, sessionToken))
+    .limit(1);
+
+  return session as SessionRecord | undefined;
 }
