@@ -14,7 +14,7 @@ import {
   type EnsureUserProfile,
   type UserRecord,
 } from "../utils";
-import { sendVerificationEmail } from "@/lib/email";
+// import { sendVerificationEmail } from "@/lib/email";
 
 type ResellerRecord = {
   id?: string | number;
@@ -77,7 +77,7 @@ export async function POST(req: Request) {
       const token = generateVerificationCode();
       const verification = await upsertVerification(user.id, token);
 
-      await sendVerificationEmail(user.email, token);
+      // await sendVerificationEmail(user.email, token);
 
       return NextResponse.json(
         {
