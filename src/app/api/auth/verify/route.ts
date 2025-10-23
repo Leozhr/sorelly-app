@@ -84,7 +84,7 @@ export async function POST(req: Request) {
       return NextResponse.json(
         {
           message: "Código enviado para o email informado.",
-          ...(includeDebug
+          ...(true
             ? {
                 debug: {
                   code: verification.token,
