@@ -79,10 +79,12 @@ export async function POST(req: Request) {
 
       // await sendVerificationEmail(user.email, token);
 
+      const includeDebug = shouldExposeVerificationDebug();
+
       return NextResponse.json(
         {
           message: "Código enviado para o email informado.",
-          ...(process.env.NODE_ENV !== "production"
+          ...(includeDebug
             ? {
                 debug: {
                   code: verification.token,
@@ -160,6 +162,16 @@ export async function POST(req: Request) {
       { status: 500 },
     );
   }
+}
+
+function shouldExposeVerificationDebug() {
+  const vercelEnv = process.env.VERCEL_ENV;
+
+  if (vercelEnv) {
+    return vercelEnv !== "production";
+  }
+
+  return process.env.NODE_ENV !== "production";
 }
 
 async function fetchResellerByEmail(
