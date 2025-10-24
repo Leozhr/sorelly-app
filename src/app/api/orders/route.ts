@@ -47,22 +47,6 @@ export async function POST(req: Request) {
       );
     }
 
-    const rawDateInput = body.data;
-    const orderDate =
-      rawDateInput === undefined || rawDateInput === null || rawDateInput === ""
-        ? formatDateOnly(new Date())
-        : parseOrderDate(rawDateInput);
-
-    if (!orderDate) {
-      return NextResponse.json(
-        {
-          error:
-            "Informe uma data de pedido válida no formato ISO 8601 ou DD/MM/AAAA.",
-        },
-        { status: 400 },
-      );
-    }
-
     if (!Array.isArray(body.produtos) || body.produtos.length === 0) {
       return NextResponse.json(
         { error: "Informe ao menos um produto para registrar o pedido." },
@@ -133,12 +117,21 @@ export async function POST(req: Request) {
     }
 
     const result = await db.transaction(async (tx) => {
+      const [previousOrder] = await tx
+        .select({ lastOrderNumber: ordersTable.orderNumber })
+        .from(ordersTable)
+        .where(eq(ordersTable.clientId, clientId))
+        .orderBy(desc(ordersTable.orderNumber))
+        .limit(1);
+
+      const nextOrderNumber = (previousOrder?.lastOrderNumber ?? 0) + 1;
+
       const [order] = await tx
         .insert(ordersTable)
         .values({
           clientId,
           clientName: client.name,
-          orderDate,
+          orderNumber: nextOrderNumber,
         })
         .returning();
 
@@ -173,7 +166,9 @@ export async function POST(req: Request) {
           id: result.order.id,
           clientId: result.order.clientId,
           clientName: result.order.clientName,
-          orderDate: result.order.orderDate,
+          numero_pedido: result.order.orderNumber,
+          isCanceled: result.order.isCanceled,
+          orderDate: formatDateOnly(result.order.createdAt),
           createdAt: result.order.createdAt,
           updatedAt: result.order.updatedAt,
           valor: totalValue.toFixed(2),
@@ -217,7 +212,9 @@ export async function GET(req: Request) {
         orderId: ordersTable.id,
         clientId: ordersTable.clientId,
         clientName: ordersTable.clientName,
+        orderNumber: ordersTable.orderNumber,
         createdAt: ordersTable.createdAt,
+        isCanceled: ordersTable.isCanceled,
         totalValue: sql<string>`
           COALESCE(SUM(${orderItemsTable.unitValue} * ${orderItemsTable.quantity}), 0)
         `,
@@ -226,18 +223,46 @@ export async function GET(req: Request) {
       .innerJoin(clientsTable, eq(ordersTable.clientId, clientsTable.id))
       .leftJoin(orderItemsTable, eq(orderItemsTable.orderId, ordersTable.id))
       .where(eq(clientsTable.userId, user.id))
-      .groupBy(ordersTable.id)
+      .groupBy(
+        ordersTable.id,
+        ordersTable.clientId,
+        ordersTable.clientName,
+        ordersTable.orderNumber,
+        ordersTable.createdAt,
+        ordersTable.isCanceled,
+      )
       .orderBy(desc(ordersTable.createdAt));
 
     const formatted = orders.map((order) => ({
       orderId: order.orderId,
       clientId: order.clientId,
       clientName: order.clientName,
+      numero_pedido: order.orderNumber,
+      isCanceled: order.isCanceled,
       valor: formatCurrency(order.totalValue),
       data: order.createdAt.toISOString(),
     }));
 
-    return NextResponse.json({ pedidos: formatted }, { status: 200 });
+    const activeOrders = orders.filter((order) => order.isCanceled === false);
+
+    const quantidadeVendas = activeOrders.length;
+    const valorVendas = activeOrders.reduce((sum, order) => {
+      const numeric = Number.parseFloat(order.totalValue ?? "0");
+      if (!Number.isFinite(numeric)) {
+        return sum;
+      }
+
+      return sum + numeric;
+    }, 0);
+
+    return NextResponse.json(
+      {
+        pedidos: formatted,
+        quantidade_vendas: quantidadeVendas,
+        valor_vendas: valorVendas.toFixed(2),
+      },
+      { status: 200 },
+    );
   } catch (error) {
     return NextResponse.json(
       {
@@ -346,44 +371,12 @@ type ParsedOrderItemInput = {
   image: Record<string, unknown> | string | null;
 };
 
-function parseOrderDate(value: unknown) {
-  if (value instanceof Date && !Number.isNaN(value.getTime())) {
-    return formatDateOnly(value);
+function formatDateOnly(value: Date | string) {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "";
   }
 
-  if (typeof value === "string") {
-    const trimmed = value.trim();
-    if (!trimmed) {
-      return null;
-    }
-
-    const directDatePattern = /^(\d{4})-(\d{2})-(\d{2})$/;
-    const directMatch = trimmed.match(directDatePattern);
-    if (directMatch) {
-      return trimmed;
-    }
-
-    const isoParsed = new Date(trimmed);
-    if (!Number.isNaN(isoParsed.getTime())) {
-      return formatDateOnly(isoParsed);
-    }
-
-    const match = trimmed.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
-    if (match) {
-      const day = Number.parseInt(match[1]!, 10);
-      const month = Number.parseInt(match[2]!, 10) - 1;
-      const year = Number.parseInt(match[3]!, 10);
-      const candidate = new Date(Date.UTC(year, month, day));
-      if (!Number.isNaN(candidate.getTime())) {
-        return formatDateOnly(candidate);
-      }
-    }
-  }
-
-  return null;
-}
-
-function formatDateOnly(date: Date) {
   const year = date.getUTCFullYear();
   const month = String(date.getUTCMonth() + 1).padStart(2, "0");
   const day = String(date.getUTCDate()).padStart(2, "0");

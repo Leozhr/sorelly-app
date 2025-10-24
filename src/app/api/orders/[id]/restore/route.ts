@@ -1,129 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { getSessionByToken, getUserById } from "../../auth/utils";
+import { getSessionByToken, getUserById } from "../../../auth/utils";
 import { db } from "@/db";
-import { clientsTable, orderItemsTable, ordersTable } from "@/db/schema";
+import { clientsTable, ordersTable } from "@/db/schema";
 import { and, eq } from "drizzle-orm";
 
-type OrderRouteContext = {
+type RestoreOrderRouteContext = {
   params: Promise<{
     id: string;
   }>;
 };
 
-export async function GET(req: NextRequest, context: OrderRouteContext) {
-  try {
-    const { id } = await context.params;
-    const orderId = parseId(id);
-
-    if (!orderId) {
-      return NextResponse.json(
-        { error: "Informe um identificador de pedido válido." },
-        { status: 400 },
-      );
-    }
-
-    const authResult = await authenticateRequest(req);
-    if ("response" in authResult) {
-      return authResult.response;
-    }
-
-    const { user } = authResult;
-
-    const [order] = await db
-      .select({
-        id: ordersTable.id,
-        clientId: ordersTable.clientId,
-        orderNumber: ordersTable.orderNumber,
-        isCanceled: ordersTable.isCanceled,
-        createdAt: ordersTable.createdAt,
-        updatedAt: ordersTable.updatedAt,
-        clientName: ordersTable.clientName,
-        clientPhone: clientsTable.phone,
-        clientWhatsApp: clientsTable.whatsApp,
-      })
-      .from(ordersTable)
-      .innerJoin(clientsTable, eq(ordersTable.clientId, clientsTable.id))
-      .where(
-        and(eq(ordersTable.id, orderId), eq(clientsTable.userId, user.id)),
-      )
-      .limit(1);
-
-    if (!order) {
-      return NextResponse.json(
-        { error: "Pedido não encontrado para o usuário autenticado." },
-        { status: 404 },
-      );
-    }
-
-    const items = await db
-      .select({
-        id: orderItemsTable.id,
-        productId: orderItemsTable.productId,
-        quantity: orderItemsTable.quantity,
-        variantId: orderItemsTable.variantId,
-        unitValue: orderItemsTable.unitValue,
-        description: orderItemsTable.description,
-        image: orderItemsTable.image,
-        createdAt: orderItemsTable.createdAt,
-        updatedAt: orderItemsTable.updatedAt,
-      })
-      .from(orderItemsTable)
-      .where(eq(orderItemsTable.orderId, orderId));
-
-    const totalValue = items.reduce((sum, item) => {
-      const numeric = Number.parseFloat(String(item.unitValue ?? 0));
-      if (!Number.isFinite(numeric)) {
-        return sum;
-      }
-
-      return sum + numeric * item.quantity;
-    }, 0);
-
-    return NextResponse.json(
-      {
-        pedido: {
-          id: order.id,
-          clientId: order.clientId,
-          valor: totalValue.toFixed(2),
-          numero_pedido: order.orderNumber,
-          isCanceled: order.isCanceled,
-          orderDate: formatDateOnly(order.createdAt),
-          createdAt: order.createdAt,
-          updatedAt: order.updatedAt,
-          cliente: {
-            id: order.clientId,
-            nome: order.clientName,
-            telefone: order.clientPhone,
-            whatsApp: order.clientWhatsApp,
-          },
-          produtos: items.map((item) => ({
-            id: item.id,
-            produtoId: item.productId,
-            quantidade: item.quantity,
-            variante: item.variantId,
-            valorUnitario: formatCurrency(item.unitValue),
-            descricao: item.description,
-            imagem: item.image,
-            createdAt: item.createdAt,
-            updatedAt: item.updatedAt,
-          })),
-        },
-      },
-      { status: 200 },
-    );
-  } catch (error) {
-    return NextResponse.json(
-      {
-        error: "Não foi possível buscar o pedido.",
-        details: error instanceof Error ? error.message : String(error),
-      },
-      { status: 500 },
-    );
-  }
-}
-
-export async function PATCH(req: NextRequest, context: OrderRouteContext) {
+export async function PATCH(
+  req: NextRequest,
+  context: RestoreOrderRouteContext,
+) {
   try {
     const { id } = await context.params;
     const orderId = parseId(id);
@@ -165,16 +56,16 @@ export async function PATCH(req: NextRequest, context: OrderRouteContext) {
       );
     }
 
-    if (order.isCanceled) {
+    if (!order.isCanceled) {
       return NextResponse.json(
-        { message: "Pedido já se encontra cancelado." },
+        { message: "Pedido já está ativo." },
         { status: 200 },
       );
     }
 
     const [updatedOrder] = await db
       .update(ordersTable)
-      .set({ isCanceled: true })
+      .set({ isCanceled: false })
       .where(eq(ordersTable.id, orderId))
       .returning({
         id: ordersTable.id,
@@ -187,14 +78,14 @@ export async function PATCH(req: NextRequest, context: OrderRouteContext) {
 
     if (!updatedOrder) {
       return NextResponse.json(
-        { error: "Não foi possível cancelar o pedido." },
+        { error: "Não foi possível reativar o pedido." },
         { status: 500 },
       );
     }
 
     return NextResponse.json(
       {
-        message: "Pedido cancelado com sucesso.",
+        message: "Pedido reativado com sucesso.",
         pedido: {
           id: updatedOrder.id,
           clientId: updatedOrder.clientId,
@@ -210,7 +101,7 @@ export async function PATCH(req: NextRequest, context: OrderRouteContext) {
   } catch (error) {
     return NextResponse.json(
       {
-        error: "Não foi possível cancelar o pedido.",
+        error: "Não foi possível reativar o pedido.",
         details: error instanceof Error ? error.message : String(error),
       },
       { status: 500 },
@@ -290,20 +181,6 @@ function parseId(value: string | undefined | null) {
   }
 
   return null;
-}
-
-function formatCurrency(value: string | null | undefined) {
-  if (!value) {
-    return "0.00";
-  }
-
-  const numeric = Number.parseFloat(value);
-
-  if (!Number.isFinite(numeric)) {
-    return "0.00";
-  }
-
-  return numeric.toFixed(2);
 }
 
 function formatDateOnly(value: Date | string) {

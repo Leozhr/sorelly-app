@@ -1,7 +1,6 @@
 import { relations } from "drizzle-orm";
 import {
   boolean,
-  date,
   integer,
   jsonb,
   numeric,
@@ -58,7 +57,8 @@ export const ordersTable = pgTable("orders", {
     .notNull()
     .references(() => clientsTable.id, { onDelete: "cascade" }),
   clientName: varchar("client_name", { length: 255 }).notNull(),
-  orderDate: date("order_date").notNull(),
+  orderNumber: integer("order_number").notNull(),
+  isCanceled: boolean("is_canceled").notNull().default(false),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().$onUpdate(() => new Date()),
 });

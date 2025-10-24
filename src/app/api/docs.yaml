@@ -1,0 +1,1153 @@
+openapi: 3.0.4
+info:
+  title: Sorelly API
+  description: |-
+    API utilizada pelo aplicativo Sorelly para validar revendedoras via código
+    de verificação e gerenciar a agenda de clientes vinculados à vendedora
+    autenticada. As rotas abaixo refletem os handlers implementados em
+    src/app/api.
+  termsOfService: https://sorelly.app/terms
+  contact:
+    email: dev-team@sorelly.app
+  license:
+    name: Proprietary
+    url: https://sorelly.app/license
+  version: 0.1.1
+servers:
+  - description: Ambiente de produção
+    url: https://sorelly-app.vercel.app
+    # Added by API Auto Mocking Plugin
+  - description: SwaggerHub API Auto Mocking
+    url: https://virtserver.swaggerhub.com/LEONARDOLEAL202/sorelly-app/0.1.1
+tags:
+  - name: auth
+    description: Fluxo de verificação e sessão de revendedoras
+  - name: clients
+    description: Gestão de clientes associados à revendedora autenticada
+  - name: orders
+    description: Criação, consulta e gerenciamento de pedidos registrados pela revendedora
+paths:
+  /auth/verify:
+    post:
+      tags:
+        - auth
+      summary: Inicia ou conclui a verificação de acesso
+      description: |-
+        Envia um novo código de verificação para o email informado ou valida um
+        código existente, criando uma nova sessão para a revendedora.
+      operationId: startOrVerifyAuth
+      requestBody:
+        $ref: '#/components/requestBodies/AuthVerification'
+      responses:
+        '200':
+          description: Código enviado ou validado com sucesso
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/VerificationPendingResponse'
+                  - $ref: '#/components/schemas/VerificationCompletedResponse'
+        '400':
+          description: Email ou código inválidos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Nenhuma revendedora encontrada para o email informado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Conflito ao sincronizar os dados da revendedora
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Erro inesperado ao processar a solicitação
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /auth/session:
+    post:
+      tags:
+        - auth
+      summary: Valida uma sessão existente
+      description: |-
+        Busca uma sessão ativa a partir do token ou apenas valida se o email
+        informado já possui cadastro. Retorna erro quando a sessão está expirada
+        ou inexistente.
+      operationId: validateSession
+      requestBody:
+        $ref: '#/components/requestBodies/SessionLookup'
+      responses:
+        '200':
+          description: Sessão válida encontrada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionValidationResponse'
+        '400':
+          description: Payload inválido (nenhum identificador informado)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Sessão inexistente ou expirada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Email válido, porém sem sessão ativa
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Usuário não encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Erro inesperado ao validar a sessão
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /clients:
+    get:
+      tags:
+        - clients
+      summary: Lista os clientes da revendedora autenticada
+      description: Retorna todos os clientes associados ao usuário vinculado ao token de sessão.
+      operationId: listClients
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Lista de clientes carregada com sucesso
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClientListResponse'
+        '401':
+          description: Token ausente, inválido ou sessão expirada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Erro inesperado ao listar os clientes
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    post:
+      tags:
+        - clients
+      summary: Cria um novo cliente
+      description: Cadastra um cliente vinculado à revendedora autenticada.
+      operationId: createClient
+      security:
+        - bearerAuth: []
+      requestBody:
+        $ref: '#/components/requestBodies/CreateClient'
+      responses:
+        '201':
+          description: Cliente cadastrado com sucesso
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClientCreatedResponse'
+        '400':
+          description: Nome ou telefone inválidos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Token ausente, inválido ou sessão expirada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Erro inesperado ao cadastrar o cliente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /clients/{clientId}:
+    parameters:
+      - name: clientId
+        in: path
+        description: Identificador numérico do cliente
+        required: true
+        schema:
+          type: integer
+          format: int32
+    get:
+      tags:
+        - clients
+      summary: Consulta um cliente específico
+      description: Retorna um cliente associado à revendedora autenticada.
+      operationId: getClient
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Cliente encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClientResponse'
+        '400':
+          description: Identificador inválido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Token ausente, inválido ou sessão expirada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Cliente não encontrado para o usuário autenticado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Erro inesperado ao buscar o cliente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    patch:
+      tags:
+        - clients
+      summary: Atualiza dados de um cliente
+      description: Permite alterar nome e/ou telefone de um cliente existente.
+      operationId: updateClient
+      security:
+        - bearerAuth: []
+      requestBody:
+        $ref: '#/components/requestBodies/UpdateClient'
+      responses:
+        '200':
+          description: Cliente atualizado com sucesso
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClientCreatedResponse'
+        '400':
+          description: Payload inválido ou campos vazios
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Token ausente, inválido ou sessão expirada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Cliente não encontrado para o usuário autenticado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Erro inesperado ao atualizar o cliente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      tags:
+        - clients
+      summary: Remove um cliente
+      description: Exclui permanentemente um cliente pelo identificador.
+      operationId: deleteClient
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Cliente removido com sucesso
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '400':
+          description: Identificador inválido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Token ausente, inválido ou sessão expirada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Cliente não encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Erro inesperado ao remover o cliente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /orders:
+    post:
+      tags:
+        - orders
+      summary: Cria um novo pedido para um cliente
+      description: Registra um pedido com os produtos informados e atribui o próximo número sequencial do cliente.
+      operationId: createOrder
+      security:
+        - bearerAuth: []
+      requestBody:
+        $ref: '#/components/requestBodies/CreateOrder'
+      responses:
+        '201':
+          description: Pedido criado com sucesso
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderCreatedResponse'
+        '400':
+          description: Payload inválido ou produtos ausentes
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Token ausente, inválido ou sessão expirada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Cliente não encontrado para o usuário autenticado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Erro inesperado ao registrar o pedido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    get:
+      tags:
+        - orders
+      summary: Lista pedidos da revendedora autenticada
+      description: Retorna os pedidos vinculados ao token de sessão, incluindo totais de vendas e valores acumulados.
+      operationId: listOrders
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Pedidos carregados com sucesso
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderListResponse'
+        '401':
+          description: Token ausente, inválido ou sessão expirada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Erro inesperado ao listar os pedidos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /orders/{orderId}:
+    parameters:
+      - name: orderId
+        in: path
+        description: Identificador numérico do pedido
+        required: true
+        schema:
+          type: integer
+          format: int32
+    get:
+      tags:
+        - orders
+      summary: Consulta um pedido específico
+      description: Recupera o pedido solicitado, incluindo dados do cliente e os produtos cadastrados.
+      operationId: getOrder
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Pedido encontrado para o usuário autenticado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderResponse'
+        '400':
+          description: Identificador inválido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Token ausente, inválido ou sessão expirada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Pedido não encontrado para o usuário autenticado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Erro inesperado ao buscar o pedido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    patch:
+      tags:
+        - orders
+      summary: Cancela um pedido ativo
+      description: Marca o pedido como cancelado (`isCanceled = true`) para removê-lo das estatísticas de vendas.
+      operationId: cancelOrder
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Pedido cancelado com sucesso ou já cancelado
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/OrderCanceledResponse'
+                  - $ref: '#/components/schemas/MessageResponse'
+        '400':
+          description: Identificador inválido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Token ausente, inválido ou sessão expirada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Pedido não encontrado para o usuário autenticado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Erro inesperado ao cancelar o pedido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /orders/{orderId}/restore:
+    parameters:
+      - name: orderId
+        in: path
+        description: Identificador numérico do pedido
+        required: true
+        schema:
+          type: integer
+          format: int32
+    patch:
+      tags:
+        - orders
+      summary: Reativa um pedido cancelado
+      description: Atualiza o pedido para `isCanceled = false` para que volte a ser considerado nas vendas.
+      operationId: restoreOrder
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Pedido reativado com sucesso ou já ativo
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/OrderRestoredResponse'
+                  - $ref: '#/components/schemas/MessageResponse'
+        '400':
+          description: Identificador inválido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Token ausente, inválido ou sessão expirada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Pedido não encontrado para o usuário autenticado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Erro inesperado ao reativar o pedido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+components:
+  schemas:
+    AuthVerificationRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+          description: Email da revendedora cadastrado no ERP
+        code:
+          type: string
+          pattern: '^[0-9]{6}$'
+          description: Código de verificação recebido por email (6 dígitos)
+      required:
+        - email
+      additionalProperties: false
+    VerificationPendingResponse:
+      type: object
+      required:
+        - message
+        - user
+      properties:
+        message:
+          type: string
+          example: Código enviado para o email informado.
+        user:
+          $ref: '#/components/schemas/User'
+        debug:
+          type: object
+          description: Retornado apenas em ambientes não-produtivos
+          properties:
+            code:
+              type: string
+              example: '123456'
+            expiresAt:
+              type: string
+              format: date-time
+          additionalProperties: false
+    VerificationCompletedResponse:
+      type: object
+      required:
+        - message
+        - user
+        - session
+      properties:
+        message:
+          type: string
+          example: Código validado e nova sessão iniciada com sucesso.
+        user:
+          $ref: '#/components/schemas/User'
+        session:
+          $ref: '#/components/schemas/Session'
+    SessionLookupRequest:
+      type: object
+      description: É necessário informar pelo menos um dos campos.
+      properties:
+        sessionToken:
+          type: string
+          description: Token retornado após validar o código
+        email:
+          type: string
+          format: email
+          description: Email cadastrado da revendedora
+      additionalProperties: false
+    SessionValidationResponse:
+      type: object
+      required:
+        - message
+        - user
+        - session
+      properties:
+        message:
+          type: string
+          example: Sessão válida.
+        user:
+          $ref: '#/components/schemas/User'
+        session:
+          $ref: '#/components/schemas/Session'
+    CreateClientRequest:
+      type: object
+      required:
+        - name
+        - phone
+      properties:
+        name:
+          type: string
+          description: Nome completo do cliente
+          example: Maria da Silva
+        phone:
+          type: string
+          description: Telefone de contato com DDD
+          example: '+55 11 91234-5678'
+      additionalProperties: false
+    UpdateClientRequest:
+      type: object
+      description: Informe ao menos um campo para atualização.
+      properties:
+        name:
+          type: string
+          description: Novo nome do cliente
+        phone:
+          type: string
+          description: Novo telefone do cliente
+      additionalProperties: false
+    Client:
+      type: object
+      required:
+        - id
+        - userId
+        - name
+        - phone
+        - whatsApp
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: integer
+          format: int32
+          example: 42
+        userId:
+          type: integer
+          format: int32
+          example: 101
+        name:
+          type: string
+          example: Maria da Silva
+        phone:
+          type: string
+          example: '+55 11 91234-5678'
+        whatsApp:
+          type: string
+          format: uri
+          example: https://wa.me/5511912345678
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    ClientListResponse:
+      type: object
+      required:
+        - clients
+      properties:
+        clients:
+          type: array
+          items:
+            $ref: '#/components/schemas/Client'
+    ClientResponse:
+      type: object
+      required:
+        - client
+      properties:
+        client:
+          $ref: '#/components/schemas/Client'
+    ClientCreatedResponse:
+      type: object
+      required:
+        - message
+        - client
+      properties:
+        message:
+          type: string
+          example: Cliente cadastrado com sucesso.
+        client:
+          $ref: '#/components/schemas/Client'
+    MessageResponse:
+      type: object
+      required:
+        - message
+      properties:
+        message:
+          type: string
+          example: Cliente removido com sucesso.
+    OrderItem:
+      type: object
+      required:
+        - id
+        - produtoId
+        - quantidade
+        - valorUnitario
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: integer
+          format: int32
+          example: 101
+        produtoId:
+          type: integer
+          format: int32
+          example: 55
+        quantidade:
+          type: integer
+          format: int32
+          example: 2
+        variante:
+          type: integer
+          format: int32
+          nullable: true
+          example: 7
+        valorUnitario:
+          type: string
+          example: '89.90'
+        descricao:
+          type: string
+          nullable: true
+          example: Kit promocional de verão
+        imagem:
+          description: URL ou metadados do produto associado
+          oneOf:
+            - type: string
+              format: uri
+            - type: object
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    OrderSummary:
+      type: object
+      required:
+        - orderId
+        - clientId
+        - clientName
+        - numero_pedido
+        - isCanceled
+        - valor
+        - data
+      properties:
+        orderId:
+          type: integer
+          format: int32
+          example: 301
+        clientId:
+          type: integer
+          format: int32
+          example: 42
+        clientName:
+          type: string
+          example: Maria da Silva
+        numero_pedido:
+          type: integer
+          format: int32
+          example: 4
+        isCanceled:
+          type: boolean
+          description: Indica se o pedido foi cancelado.
+        valor:
+          type: string
+          example: '259.70'
+        data:
+          type: string
+          format: date-time
+          description: Data de criação do pedido em ISO 8601.
+    OrderDetail:
+      type: object
+      required:
+        - id
+        - clientId
+        - valor
+        - numero_pedido
+        - isCanceled
+        - orderDate
+        - createdAt
+        - updatedAt
+        - cliente
+        - produtos
+      properties:
+        id:
+          type: integer
+          format: int32
+          example: 301
+        clientId:
+          type: integer
+          format: int32
+          example: 42
+        valor:
+          type: string
+          example: '259.70'
+        numero_pedido:
+          type: integer
+          format: int32
+          example: 4
+        isCanceled:
+          type: boolean
+        orderDate:
+          type: string
+          format: date
+          description: Data do pedido formatada como AAAA-MM-DD.
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        cliente:
+          type: object
+          required:
+            - id
+            - nome
+            - telefone
+            - whatsApp
+          properties:
+            id:
+              type: integer
+              format: int32
+            nome:
+              type: string
+            telefone:
+              type: string
+            whatsApp:
+              type: string
+              format: uri
+        produtos:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrderItem'
+    OrderCreatedResponse:
+      type: object
+      required:
+        - message
+        - pedido
+      properties:
+        message:
+          type: string
+          example: Pedido registrado com sucesso.
+        pedido:
+          type: object
+          required:
+            - id
+            - clientId
+            - clientName
+            - numero_pedido
+            - isCanceled
+            - orderDate
+            - createdAt
+            - updatedAt
+            - valor
+            - itens
+          properties:
+            id:
+              type: integer
+              format: int32
+            clientId:
+              type: integer
+              format: int32
+            clientName:
+              type: string
+            numero_pedido:
+              type: integer
+              format: int32
+            isCanceled:
+              type: boolean
+            orderDate:
+              type: string
+              format: date
+            createdAt:
+              type: string
+              format: date-time
+            updatedAt:
+              type: string
+              format: date-time
+            valor:
+              type: string
+            itens:
+              type: array
+              items:
+                $ref: '#/components/schemas/OrderItem'
+    CreateOrderProduct:
+      type: object
+      required:
+        - produtoId
+        - unidades
+        - valor
+      properties:
+        produtoId:
+          type: integer
+          format: int32
+          description: Identificador numérico do produto.
+          example: 55
+        unidades:
+          type: integer
+          format: int32
+          minimum: 1
+          description: Quantidade de itens solicitados.
+          example: 2
+        valor:
+          oneOf:
+            - type: number
+            - type: string
+          description: Valor unitário do produto (aceita número ou string sanitizada).
+          example: '89,90'
+        variante:
+          type: integer
+          format: int32
+          nullable: true
+          description: Identificador opcional da variação do produto.
+        descricao:
+          type: string
+          nullable: true
+          description: Observação exibida ao lado do produto.
+        imagem:
+          description: URL ou metadados utilizados para exibir a imagem do produto.
+          oneOf:
+            - type: string
+              format: uri
+            - type: object
+          nullable: true
+    CreateOrderRequest:
+      type: object
+      required:
+        - clienteId
+        - produtos
+      properties:
+        clienteId:
+          type: integer
+          format: int32
+          description: Identificador numérico do cliente vinculado ao pedido.
+          example: 42
+        produtos:
+          type: array
+          minItems: 1
+          description: Lista de produtos que compõem o pedido.
+          items:
+            $ref: '#/components/schemas/CreateOrderProduct'
+    OrderListResponse:
+      type: object
+      required:
+        - pedidos
+        - quantidade_vendas
+        - valor_vendas
+      properties:
+        pedidos:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrderSummary'
+        quantidade_vendas:
+          type: integer
+          format: int32
+          description: Quantidade de pedidos não cancelados.
+          example: 12
+        valor_vendas:
+          type: string
+          description: Soma dos valores dos pedidos ativos em formato decimal.
+          example: '3490.50'
+    OrderResponse:
+      type: object
+      required:
+        - pedido
+      properties:
+        pedido:
+          $ref: '#/components/schemas/OrderDetail'
+    OrderCanceledResponse:
+      type: object
+      required:
+        - message
+        - pedido
+      properties:
+        message:
+          type: string
+          example: Pedido cancelado com sucesso.
+        pedido:
+          type: object
+          required:
+            - id
+            - clientId
+            - numero_pedido
+            - isCanceled
+            - orderDate
+            - createdAt
+            - updatedAt
+          properties:
+            id:
+              type: integer
+              format: int32
+            clientId:
+              type: integer
+              format: int32
+            numero_pedido:
+              type: integer
+              format: int32
+            isCanceled:
+              type: boolean
+            orderDate:
+              type: string
+              format: date
+            createdAt:
+              type: string
+              format: date-time
+            updatedAt:
+              type: string
+              format: date-time
+    OrderRestoredResponse:
+      type: object
+      required:
+        - message
+        - pedido
+      properties:
+        message:
+          type: string
+          example: Pedido reativado com sucesso.
+        pedido:
+          type: object
+          required:
+            - id
+            - clientId
+            - numero_pedido
+            - isCanceled
+            - orderDate
+            - createdAt
+            - updatedAt
+          properties:
+            id:
+              type: integer
+              format: int32
+            clientId:
+              type: integer
+              format: int32
+            numero_pedido:
+              type: integer
+              format: int32
+            isCanceled:
+              type: boolean
+            orderDate:
+              type: string
+              format: date
+            createdAt:
+              type: string
+              format: date-time
+            updatedAt:
+              type: string
+              format: date-time
+    Session:
+      type: object
+      required:
+        - token
+      properties:
+        token:
+          type: string
+          example: 3cbf0ec6-31d2-4ef9-95d5-1df32e1dfd8b
+        expiresAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+          nullable: true
+    User:
+      type: object
+      required:
+        - id
+        - name
+        - email
+        - isVerified
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: integer
+          format: int32
+          example: 101
+        name:
+          type: string
+          example: Ana Souza
+        email:
+          type: string
+          format: email
+        isVerified:
+          type: boolean
+          description: Indica se o email já foi verificado
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    ErrorResponse:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: string
+          example: Sessão inválida. Informe o token no header Authorization.
+        details:
+          type: string
+          description: Mensagem técnica opcional para depuração
+  requestBodies:
+    AuthVerification:
+      description: Dados necessários para enviar ou validar o código de verificação.
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/AuthVerificationRequest'
+    SessionLookup:
+      description: Token de sessão ou email para validação.
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/SessionLookupRequest'
+    CreateClient:
+      description: Informações obrigatórias para cadastrar um cliente.
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/CreateClientRequest'
+    UpdateClient:
+      description: Campos opcionais para atualização parcial de um cliente.
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/UpdateClientRequest'
+    CreateOrder:
+      description: Dados necessários para registrar um pedido e seus produtos.
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/CreateOrderRequest'
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: UUID
