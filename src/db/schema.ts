@@ -1,5 +1,15 @@
 import { relations } from "drizzle-orm";
-import { boolean, integer, pgTable, timestamp, varchar } from "drizzle-orm/pg-core";
+import {
+  boolean,
+  date,
+  integer,
+  jsonb,
+  numeric,
+  pgTable,
+  text,
+  timestamp,
+  varchar,
+} from "drizzle-orm/pg-core";
 
 export const usersTable = pgTable("users", {
   id: integer().primaryKey(),
@@ -42,6 +52,33 @@ export const clientsTable = pgTable("clients", {
   updatedAt: timestamp("updated_at").notNull().$onUpdate(() => new Date()),
 });
 
+export const ordersTable = pgTable("orders", {
+  id: integer().primaryKey().generatedAlwaysAsIdentity(),
+  clientId: integer("client_id")
+    .notNull()
+    .references(() => clientsTable.id, { onDelete: "cascade" }),
+  clientName: varchar("client_name", { length: 255 }).notNull(),
+  orderDate: date("order_date").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().$onUpdate(() => new Date()),
+});
+
+export const orderItemsTable = pgTable("order_items", {
+  id: integer().primaryKey().generatedAlwaysAsIdentity(),
+  orderId: integer("order_id")
+    .notNull()
+    .references(() => ordersTable.id, { onDelete: "cascade" }),
+  clientName: varchar("client_name", { length: 255 }).notNull(),
+  productId: integer("product_id").notNull(),
+  image: jsonb("image"),
+  quantity: integer("quantity").notNull(),
+  variantId: integer("variant_id"),
+  unitValue: numeric("unit_value", { precision: 12, scale: 2 }).notNull(),
+  description: text("description"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().$onUpdate(() => new Date()),
+});
+
 export const usersRelations = relations(usersTable, ({ many }) => ({
   sessions: many(sessionsTable),
   verifications: many(verificationTable),
@@ -62,9 +99,25 @@ export const sessionsRelations = relations(sessionsTable, ({ one }) => ({
   }),
 }));
 
-export const clientsRelations = relations(clientsTable, ({ one }) => ({
+export const clientsRelations = relations(clientsTable, ({ one, many }) => ({
   user: one(usersTable, {
     fields: [clientsTable.userId],
     references: [usersTable.id],
+  }),
+  orders: many(ordersTable),
+}));
+
+export const ordersRelations = relations(ordersTable, ({ one, many }) => ({
+  client: one(clientsTable, {
+    fields: [ordersTable.clientId],
+    references: [clientsTable.id],
+  }),
+  items: many(orderItemsTable),
+}));
+
+export const orderItemsRelations = relations(orderItemsTable, ({ one }) => ({
+  order: one(ordersTable, {
+    fields: [orderItemsTable.orderId],
+    references: [ordersTable.id],
   }),
 }));
