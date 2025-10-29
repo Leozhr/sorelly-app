@@ -93,10 +93,21 @@ export const cartsTable = pgTable("carts", {
   updatedAt: timestamp("updated_at").notNull().$onUpdate(() => new Date()),
 });
 
+export const favoritesTable = pgTable("favorites", {
+  id: integer().primaryKey().generatedAlwaysAsIdentity(),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => usersTable.id, { onDelete: "cascade" }),
+  productId: varchar("product_id", { length: 255 }).notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().$onUpdate(() => new Date()),
+});
+
 export const usersRelations = relations(usersTable, ({ many }) => ({
   sessions: many(sessionsTable),
   verifications: many(verificationTable),
   clients: many(clientsTable),
+  favorites: many(favoritesTable),
 }));
 
 export const verificationRelations = relations(verificationTable, ({ one }) => ({
@@ -141,5 +152,12 @@ export const cartsRelations = relations(cartsTable, ({ one }) => ({
   client: one(clientsTable, {
     fields: [cartsTable.clientId],
     references: [clientsTable.id],
+  }),
+}));
+
+export const favoritesRelations = relations(favoritesTable, ({ one }) => ({
+  user: one(usersTable, {
+    fields: [favoritesTable.userId],
+    references: [usersTable.id],
   }),
 }));

@@ -28,6 +28,8 @@ tags:
     description: Criação, consulta e gerenciamento de pedidos registrados pela revendedora
   - name: carts
     description: Itens de carrinho associados aos clientes da revendedora
+  - name: favorites
+    description: Produtos marcados como favoritos pela revendedora autenticada
 paths:
   /auth/verify:
     post:
@@ -331,6 +333,110 @@ paths:
                 $ref: '#/components/schemas/CartListResponse'
         '401':
           description: Token ausente, inválido ou sessão expirada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /favorites:
+    get:
+      tags:
+        - favorites
+      summary: Lista os produtos favoritos
+      description: Retorna os identificadores dos produtos favoritados pela revendedora autenticada, separados por vírgula.
+      operationId: listFavorites
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Favoritos recuperados com sucesso
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FavoritesListResponse'
+        '401':
+          description: Token ausente, inválido ou sessão expirada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Erro inesperado ao listar os favoritos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    post:
+      tags:
+        - favorites
+      summary: Adiciona um produto aos favoritos
+      description: Inclui um produto na lista de favoritos da revendedora autenticada.
+      operationId: addFavorite
+      security:
+        - bearerAuth: []
+      requestBody:
+        $ref: '#/components/requestBodies/CreateFavorite'
+      responses:
+        '201':
+          description: Produto favoritado com sucesso
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FavoriteCreatedResponse'
+        '200':
+          description: Produto já estava favoritado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FavoriteAlreadyExistsResponse'
+        '400':
+          description: Identificador do produto inválido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Token ausente, inválido ou sessão expirada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Erro inesperado ao adicionar o favorito
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      tags:
+        - favorites
+      summary: Remove um produto dos favoritos
+      description: Exclui um produto da lista de favoritos da revendedora autenticada.
+      operationId: removeFavorite
+      security:
+        - bearerAuth: []
+      requestBody:
+        $ref: '#/components/requestBodies/CreateFavorite'
+      responses:
+        '200':
+          description: Produto removido (ou já ausente) dos favoritos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '400':
+          description: Identificador do produto inválido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Token ausente, inválido ou sessão expirada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Erro inesperado ao remover o favorito
           content:
             application/json:
               schema:
@@ -837,6 +943,66 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/CartItem'
+    Favorite:
+      type: object
+      required:
+        - id
+        - productId
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: integer
+          format: int32
+          example: 7
+        productId:
+          type: string
+          example: A1544
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    FavoriteBasic:
+      type: object
+      required:
+        - productId
+      properties:
+        productId:
+          type: string
+          example: A1544
+    FavoriteCreatedResponse:
+      type: object
+      required:
+        - message
+        - favorito
+      properties:
+        message:
+          type: string
+          example: Produto adicionado aos favoritos com sucesso.
+        favorito:
+          $ref: '#/components/schemas/Favorite'
+    FavoriteAlreadyExistsResponse:
+      type: object
+      required:
+        - message
+        - favorito
+      properties:
+        message:
+          type: string
+          example: Produto já está favoritado.
+        favorito:
+          $ref: '#/components/schemas/FavoriteBasic'
+    FavoritesListResponse:
+      type: object
+      required:
+        - favoritos
+      properties:
+        favoritos:
+          type: string
+          description: Identificadores dos produtos favoritos separados por vírgula.
+          example: '3,43,54,23,4,32'
     OrderItem:
       type: object
       required:
@@ -1108,6 +1274,15 @@ components:
             - type: string
           description: Valor total do item no carrinho (aceita número ou string sanitizada).
           example: 122.0
+    CreateFavoriteRequest:
+      type: object
+      required:
+        - productId
+      properties:
+        productId:
+          type: string
+          description: Identificador do produto a ser favoritado.
+          example: A1544
     CreateOrderRequest:
       type: object
       required:
@@ -1331,6 +1506,13 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/CreateCartItemRequest'
+    CreateFavorite:
+      description: Dados necessários para favoritar ou desfavoritar um produto.
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/CreateFavoriteRequest'
   securitySchemes:
     bearerAuth:
       type: http
