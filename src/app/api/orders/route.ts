@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 import { getSessionByToken, getUserById } from "../auth/utils";
 import { db } from "@/db";
-import { clientsTable, orderItemsTable, ordersTable } from "@/db/schema";
+import { cartsTable, clientsTable, orderItemsTable, ordersTable } from "@/db/schema";
 import { and, desc, eq, sql } from "drizzle-orm";
 
 export async function POST(req: Request) {
@@ -150,6 +150,8 @@ export async function POST(req: Request) {
           })),
         )
         .returning();
+
+      await tx.delete(cartsTable).where(eq(cartsTable.clientId, clientId));
 
       return { order, insertedItems };
     });

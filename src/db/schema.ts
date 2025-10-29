@@ -79,6 +79,20 @@ export const orderItemsTable = pgTable("order_items", {
   updatedAt: timestamp("updated_at").notNull().$onUpdate(() => new Date()),
 });
 
+export const cartsTable = pgTable("carts", {
+  id: integer().primaryKey().generatedAlwaysAsIdentity(),
+  clientId: integer("client_id")
+    .notNull()
+    .references(() => clientsTable.id, { onDelete: "cascade" }),
+  product: jsonb("product").notNull(),
+  variation: jsonb("variation").notNull(),
+  client: jsonb("client").notNull(),
+  quantity: integer("quantity").notNull().default(1),
+  total: numeric("total", { precision: 12, scale: 2 }).notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().$onUpdate(() => new Date()),
+});
+
 export const usersRelations = relations(usersTable, ({ many }) => ({
   sessions: many(sessionsTable),
   verifications: many(verificationTable),
@@ -105,6 +119,7 @@ export const clientsRelations = relations(clientsTable, ({ one, many }) => ({
     references: [usersTable.id],
   }),
   orders: many(ordersTable),
+  carts: many(cartsTable),
 }));
 
 export const ordersRelations = relations(ordersTable, ({ one, many }) => ({
@@ -119,5 +134,12 @@ export const orderItemsRelations = relations(orderItemsTable, ({ one }) => ({
   order: one(ordersTable, {
     fields: [orderItemsTable.orderId],
     references: [ordersTable.id],
+  }),
+}));
+
+export const cartsRelations = relations(cartsTable, ({ one }) => ({
+  client: one(clientsTable, {
+    fields: [cartsTable.clientId],
+    references: [clientsTable.id],
   }),
 }));

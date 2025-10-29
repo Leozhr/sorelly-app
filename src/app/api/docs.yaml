@@ -26,6 +26,8 @@ tags:
     description: Gestão de clientes associados à revendedora autenticada
   - name: orders
     description: Criação, consulta e gerenciamento de pedidos registrados pela revendedora
+  - name: carts
+    description: Itens de carrinho associados aos clientes da revendedora
 paths:
   /auth/verify:
     post:
@@ -307,6 +309,75 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
         '500':
           description: Erro inesperado ao remover o cliente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /carts:
+    get:
+      tags:
+        - carts
+      summary: Lista os itens no carrinho
+      description: Retorna todos os itens de carrinho associados aos clientes da revendedora autenticada.
+      operationId: listCartItems
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Itens do carrinho carregados com sucesso
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CartListResponse'
+        '401':
+          description: Token ausente, inválido ou sessão expirada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Erro inesperado ao listar os itens do carrinho
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    post:
+      tags:
+        - carts
+      summary: Adiciona um produto ao carrinho
+      description: Cria um novo item de carrinho vinculado a um cliente da revendedora autenticada.
+      operationId: createCartItem
+      security:
+        - bearerAuth: []
+      requestBody:
+        $ref: '#/components/requestBodies/CreateCartItem'
+      responses:
+        '201':
+          description: Produto adicionado ao carrinho com sucesso
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CartCreatedResponse'
+        '400':
+          description: Payload inválido ou dados do cliente/produto inconsistentes
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Token ausente, inválido ou sessão expirada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Cliente não encontrado ou não pertence à revendedora autenticada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Erro inesperado ao adicionar o produto ao carrinho
           content:
             application/json:
               schema:
@@ -693,6 +764,79 @@ components:
         message:
           type: string
           example: Cliente removido com sucesso.
+    CartSnapshot:
+      type: object
+      description: Estrutura flexível utilizada para armazenar os dados completos do produto, variação ou cliente no carrinho.
+      additionalProperties: true
+      example:
+        produto: A1544
+        descricao: ANEL BANHADO OURO 18K LISO TREVO CRAVEJADO 16
+        tamanho: '16'
+        referencia: A1544016
+        valor: 122
+        disponivel: true
+    CartItem:
+      type: object
+      required:
+        - id
+        - clientId
+        - product
+        - variation
+        - client
+        - quantity
+        - total
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: integer
+          format: int32
+          example: 15
+        clientId:
+          type: integer
+          format: int32
+          example: 12
+        product:
+          $ref: '#/components/schemas/CartSnapshot'
+        variation:
+          $ref: '#/components/schemas/CartSnapshot'
+        client:
+          $ref: '#/components/schemas/CartSnapshot'
+        quantity:
+          type: integer
+          format: int32
+          minimum: 1
+          example: 1
+        total:
+          type: number
+          format: double
+          example: 122.0
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    CartCreatedResponse:
+      type: object
+      required:
+        - message
+        - cart
+      properties:
+        message:
+          type: string
+          example: Produto adicionado ao carrinho com sucesso.
+        cart:
+          $ref: '#/components/schemas/CartItem'
+    CartListResponse:
+      type: object
+      required:
+        - carts
+      properties:
+        carts:
+          type: array
+          items:
+            $ref: '#/components/schemas/CartItem'
     OrderItem:
       type: object
       required:
@@ -930,6 +1074,40 @@ components:
               format: uri
             - type: object
           nullable: true
+    CreateCartItemRequest:
+      type: object
+      required:
+        - clientId
+        - product
+        - variation
+        - client
+        - quantity
+        - total
+      properties:
+        clientId:
+          type: integer
+          format: int32
+          description: Identificador do cliente associado ao item do carrinho.
+          example: 12
+        product:
+          $ref: '#/components/schemas/CartSnapshot'
+        variation:
+          $ref: '#/components/schemas/CartSnapshot'
+        client:
+          $ref: '#/components/schemas/CartSnapshot'
+        quantity:
+          type: integer
+          format: int32
+          minimum: 1
+          description: Quantidade de unidades no carrinho.
+          example: 1
+        total:
+          oneOf:
+            - type: number
+              format: double
+            - type: string
+          description: Valor total do item no carrinho (aceita número ou string sanitizada).
+          example: 122.0
     CreateOrderRequest:
       type: object
       required:
@@ -1146,6 +1324,13 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/CreateOrderRequest'
+    CreateCartItem:
+      description: Informações necessárias para adicionar um item ao carrinho de um cliente.
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/CreateCartItemRequest'
   securitySchemes:
     bearerAuth:
       type: http
