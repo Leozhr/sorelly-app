@@ -4,6 +4,7 @@ import { useState } from "react";
 import { X, Minus, Plus, Trash2, ShoppingBag } from "lucide-react";
 import Image from "next/image";
 import { useCart } from "../context/CartContext";
+import { ensureHttpImageUrl } from "@/app/utils/image";
 
 type CartSidebarProps = {
   isOpen: boolean;
@@ -194,7 +195,7 @@ export default function CartSidebar({ isOpen, onClose, user: userProp, client: c
                     {/* Imagem */}
                     <div className="relative w-20 h-20 shrink-0 bg-white rounded-lg overflow-hidden border border-[#d5d5d5]">
                       <Image
-                        src={item.imagem}
+                        src={ensureHttpImageUrl(item.imagem)}
                         alt={item.descricao}
                         fill
                         className="object-contain p-2"

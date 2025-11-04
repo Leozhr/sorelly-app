@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { ArrowLeft, Heart, Share2, Minus, Plus, ShoppingCart, Check } from "lucide-react";
 import type { Product } from "@/app/types";
 import { useCart } from "../../context/CartContext";
+import { ensureHttpImageUrl } from "@/app/utils/image";
 
 type ProductDetailClientProps = {
   product: Product;
@@ -23,7 +24,7 @@ export default function ProductDetailClient({ product, user, client }: ProductDe
 
   const price = product.variacoes[0]?.valor || 0;
   const originalPrice = price * 1.2;
-  const images = product.variacoes[0]?.imagem || [];
+  const images = (product.variacoes[0]?.imagem || []).map(ensureHttpImageUrl);
 
   const handleQuantityChange = (action: 'increase' | 'decrease') => {
     if (action === 'increase') {
