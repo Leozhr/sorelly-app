@@ -1,9 +1,10 @@
 'use client';
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import type { Product, User } from "@/app/types";
 import Header from "./Header";
 import ProductsGrid from "./ProductsGrid";
+import { useCart } from "../context/CartContext";
 
 type PageClientProps = {
   products: Product[];
@@ -14,12 +15,18 @@ type PageClientProps = {
 
 export default function PageClient({ products, userData, user, client }: PageClientProps) {
   const [searchQuery, setSearchQuery] = useState("");
+  const { setUserAndClient } = useCart();
+
+  useEffect(() => {
+    setUserAndClient(user, client, userData?.email);
+  }, [user, client, userData?.email, setUserAndClient]);
 
   return (
     <div className="min-h-screen bg-white">
       <Header 
         userData={userData} 
-        client={client} 
+        client={client}
+        user={user}
         onSearch={setSearchQuery}
       />
 

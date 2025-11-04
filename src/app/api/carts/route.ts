@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { getSessionByToken, getUserById } from "../auth/utils";
+import { getSessionByToken, getUserById, getUserByEmail } from "../auth/utils";
 import { db } from "@/db";
 import { cartsTable, clientsTable } from "@/db/schema";
 import { and, desc, eq } from "drizzle-orm";
@@ -57,12 +57,6 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   try {
-    const authResult = await authenticateRequest(req);
-    if ("response" in authResult) {
-      return authResult.response;
-    }
-
-    const { user } = authResult;
     const body = await safeJson(req);
 
     if (!isPlainObject(body)) {
@@ -70,6 +64,31 @@ export async function POST(req: Request) {
         { error: "Payload inválido. Envie um objeto JSON." },
         { status: 400 },
       );
+    }
+
+    // Verificar se há email no body para autenticação alternativa
+    const email = typeof body.email === "string" ? body.email.trim() : "";
+    const devmasterUserId = typeof body.devmasterUserId === "string" ? body.devmasterUserId : null;
+    let user;
+    let skipUserIdValidation = false;
+
+    if (email) {
+      // Autenticação por email
+      const authResult = await authenticateByEmail(email);
+      if ("response" in authResult) {
+        return authResult.response;
+      }
+      user = authResult.user;
+      // Quando autentica por email, não validar user.id com clientsTable.userId
+      // pois eles podem ser diferentes (ID interno vs ID Devmaster)
+      skipUserIdValidation = true;
+    } else {
+      // Autenticação por token (método original)
+      const authResult = await authenticateRequest(req);
+      if ("response" in authResult) {
+        return authResult.response;
+      }
+      user = authResult.user;
     }
 
     const product = isPlainObject(body.product) ? body.product : null;
@@ -89,25 +108,68 @@ export async function POST(req: Request) {
     }
 
     const clientPayload = isPlainObject(body.client) ? body.client : null;
-    if (!clientPayload) {
+    
+    // Se não houver client no payload, buscar pelo clientId quando autenticado por email
+    let clientId = parseInteger(body.clientId);
+    let finalClientPayload = clientPayload;
+
+    if (!clientPayload && email && clientId) {
+      // Buscar dados do cliente no banco
+      // Se skipUserIdValidation for true, buscar apenas por clientId
+      const [clientFromDb] = skipUserIdValidation
+        ? await db
+            .select()
+            .from(clientsTable)
+            .where(eq(clientsTable.id, clientId))
+            .limit(1)
+        : await db
+            .select()
+            .from(clientsTable)
+            .where(
+              and(eq(clientsTable.id, clientId), eq(clientsTable.userId, user.id)),
+            )
+            .limit(1);
+
+      if (!clientFromDb) {
+        return NextResponse.json(
+          {
+            error:
+              "Cliente não encontrado ou não pertence ao usuário autenticado.",
+          },
+          { status: 404 },
+        );
+      }
+
+      // Criar payload do cliente a partir dos dados do banco
+      finalClientPayload = {
+        id: clientFromDb.id,
+        userId: clientFromDb.userId,
+        name: clientFromDb.name,
+        phone: clientFromDb.phone,
+      };
+    } else if (!clientPayload) {
       return NextResponse.json(
         { error: "Informe os dados do cliente no formato esperado." },
         { status: 400 },
       );
     }
 
-    const payloadUserId = parseInteger(clientPayload.userId);
-    if (payloadUserId && payloadUserId !== user.id) {
-      return NextResponse.json(
-        { error: "Dados do cliente não correspondem ao usuário autenticado." },
-        { status: 400 },
-      );
+    // Validar userId apenas se não for autenticação por email
+    if (!skipUserIdValidation) {
+      const payloadUserId = parseInteger(finalClientPayload!.userId);
+      if (payloadUserId && payloadUserId !== user.id) {
+        return NextResponse.json(
+          { error: "Dados do cliente não correspondem ao usuário autenticado." },
+          { status: 400 },
+        );
+      }
     }
 
-    const clientId =
-      parseInteger(body.clientId) ??
-      parseInteger(clientPayload.id) ??
-      parseInteger(clientPayload.clienteId);
+    if (!clientId) {
+      clientId =
+        parseInteger(finalClientPayload!.id) ??
+        parseInteger((finalClientPayload as any).clienteId);
+    }
 
     if (!clientId) {
       return NextResponse.json(
@@ -117,7 +179,7 @@ export async function POST(req: Request) {
     }
 
     const payloadClientId =
-      parseInteger(clientPayload.id) ?? parseInteger(clientPayload.clienteId);
+      parseInteger(finalClientPayload!.id) ?? parseInteger((finalClientPayload as any).clienteId);
 
     if (payloadClientId && payloadClientId !== clientId) {
       return NextResponse.json(
@@ -152,13 +214,21 @@ export async function POST(req: Request) {
       );
     }
 
-    const [client] = await db
-      .select({ id: clientsTable.id })
-      .from(clientsTable)
-      .where(
-        and(eq(clientsTable.id, clientId), eq(clientsTable.userId, user.id)),
-      )
-      .limit(1);
+    // Verificar se o cliente existe
+    // Se skipUserIdValidation, não validar o userId
+    const [client] = skipUserIdValidation
+      ? await db
+          .select({ id: clientsTable.id })
+          .from(clientsTable)
+          .where(eq(clientsTable.id, clientId))
+          .limit(1)
+      : await db
+          .select({ id: clientsTable.id })
+          .from(clientsTable)
+          .where(
+            and(eq(clientsTable.id, clientId), eq(clientsTable.userId, user.id)),
+          )
+          .limit(1);
 
     if (!client) {
       return NextResponse.json(
@@ -176,7 +246,7 @@ export async function POST(req: Request) {
         clientId,
         product,
         variation,
-        client: clientPayload,
+        client: finalClientPayload,
         quantity,
         total: totalValue.toFixed(2),
       })
@@ -263,6 +333,30 @@ async function authenticateRequest(req: Request) {
             "Usuário vinculado à sessão não foi encontrado. Solicite uma nova sessão.",
         },
         { status: 500 },
+      ),
+    } as const;
+  }
+
+  return { user } as const;
+}
+
+async function authenticateByEmail(email: string) {
+  if (!email) {
+    return {
+      response: NextResponse.json(
+        { error: "Email não informado." },
+        { status: 400 },
+      ),
+    } as const;
+  }
+
+  const user = await getUserByEmail(email);
+
+  if (!user) {
+    return {
+      response: NextResponse.json(
+        { error: "Usuário não encontrado com o email informado." },
+        { status: 404 },
       ),
     } as const;
   }

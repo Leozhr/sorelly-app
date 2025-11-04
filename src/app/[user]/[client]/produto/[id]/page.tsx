@@ -19,7 +19,7 @@ export default async function ProductDetail({ params }: ProductDetailProps) {
 
   return (
     <>
-      <Header userData={userData} client={client} />
+      <Header userData={userData} client={client} user={user} />
       <ProductDetailClient product={product} user={user} client={client} />
     </>
   );

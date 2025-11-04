@@ -10,10 +10,11 @@ import Image from "next/image";
 type HeaderProps = {
   userData: User | null;
   client: string;
+  user?: string;
   onSearch?: (query: string) => void;
 };
 
-export default function Header({ userData, client, onSearch }: HeaderProps) {
+export default function Header({ userData, client, user, onSearch }: HeaderProps) {
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const { getTotalItems } = useCart();
@@ -87,7 +88,7 @@ export default function Header({ userData, client, onSearch }: HeaderProps) {
         </div>
       </header>
 
-      <CartSidebar isOpen={isCartOpen} onClose={() => setIsCartOpen(false)} />
+      <CartSidebar isOpen={isCartOpen} onClose={() => setIsCartOpen(false)} user={user} client={client} userEmail={userData?.email} />
     </>
   );
 }

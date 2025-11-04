@@ -20,13 +20,26 @@ type CartContextType = {
   getTotal: () => number;
   getTotalItems: () => number;
   isLoaded: boolean;
+  user: string | null;
+  client: string | null;
+  userEmail: string | null;
+  setUserAndClient: (user: string, client: string, email?: string) => void;
 };
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
 
-export function CartProvider({ children }: { children: ReactNode }) {
+type CartProviderProps = {
+  children: ReactNode;
+  user?: string;
+  client?: string;
+};
+
+export function CartProvider({ children, user: initialUser, client: initialClient }: CartProviderProps) {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
+  const [user, setUser] = useState<string | null>(initialUser || null);
+  const [client, setClient] = useState<string | null>(initialClient || null);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
 
   // Carregar carrinho do localStorage
   useEffect(() => {
@@ -97,6 +110,14 @@ export function CartProvider({ children }: { children: ReactNode }) {
     return cart.reduce((total, item) => total + item.quantidade, 0);
   };
 
+  const setUserAndClient = (newUser: string, newClient: string, email?: string) => {
+    setUser(newUser);
+    setClient(newClient);
+    if (email) {
+      setUserEmail(email);
+    }
+  };
+
   return (
     <CartContext.Provider
       value={{
@@ -108,6 +129,10 @@ export function CartProvider({ children }: { children: ReactNode }) {
         getTotal,
         getTotalItems,
         isLoaded,
+        user,
+        client,
+        userEmail,
+        setUserAndClient,
       }}
     >
       {children}

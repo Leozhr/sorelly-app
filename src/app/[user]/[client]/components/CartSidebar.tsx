@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from "react";
 import { X, Minus, Plus, Trash2, ShoppingBag } from "lucide-react";
 import Image from "next/image";
 import { useCart } from "../context/CartContext";
@@ -7,10 +8,135 @@ import { useCart } from "../context/CartContext";
 type CartSidebarProps = {
   isOpen: boolean;
   onClose: () => void;
+  user?: string;
+  client?: string;
+  userEmail?: string;
 };
 
-export default function CartSidebar({ isOpen, onClose }: CartSidebarProps) {
-  const { cart, updateQuantity, removeFromCart, getTotal, getTotalItems, clearCart } = useCart();
+export default function CartSidebar({ isOpen, onClose, user: userProp, client: clientProp, userEmail: userEmailProp }: CartSidebarProps) {
+  const { cart, updateQuantity, removeFromCart, getTotal, getTotalItems, clearCart, user: userContext, client: clientContext, userEmail: userEmailContext } = useCart();
+  
+  // Priorizar props sobre contexto
+  const user = userProp || userContext;
+  const client = clientProp || clientContext;
+  const userEmail = userEmailProp || userEmailContext;
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleFinalizarPedido = async () => {
+    if (!user || !client) {
+      setError('Informações de usuário ou cliente não disponíveis');
+      return;
+    }
+
+    // Buscar sessionToken do localStorage
+    const sessionToken = localStorage.getItem('sessionToken');
+    
+    // Verificar se tem token OU email
+    if (!sessionToken && !userEmail) {
+      setError('Token de sessão ou email não encontrado. Faça login novamente.');
+      return;
+    }
+
+    // Converter client (ID da URL) para número
+    const clientId = parseInt(client, 10);
+    if (isNaN(clientId)) {
+      setError('ID do cliente inválido');
+      return;
+    }
+
+    setIsSubmitting(true);
+    setError(null);
+
+    try {
+      let clientData = null;
+
+      // Se houver token, buscar dados completos do cliente
+      if (sessionToken) {
+        const clientResponse = await fetch(`/api/clients/${clientId}`, {
+          headers: {
+            'Authorization': `Bearer ${sessionToken}`,
+          },
+        });
+
+        if (!clientResponse.ok) {
+          throw new Error('Erro ao buscar dados do cliente');
+        }
+
+        const responseData = await clientResponse.json();
+        clientData = responseData.client;
+      }
+
+      // Enviar cada item do carrinho para a API
+      const promises = cart.map(async (item) => {
+        const cartPayload: any = {
+          clientId: clientId,
+          product: {
+            produto: item.produto,
+            descricao: item.descricao,
+            material: item.material,
+          },
+          variation: {
+            valor: item.valor,
+            imagem: item.imagem,
+          },
+          quantity: item.quantidade,
+          total: item.valor * item.quantidade,
+        };
+
+        // Se temos dados completos do cliente (com token), adicionar
+        if (clientData) {
+          cartPayload.client = {
+            id: clientData.id,
+            userId: clientData.userId,
+            name: clientData.name,
+            phone: clientData.phone,
+          };
+        }
+
+        // Se não temos token, adicionar email para autenticação alternativa
+        if (!sessionToken && userEmail) {
+          cartPayload.email = userEmail;
+          // Adicionar devmasterUserId (ID do usuário da URL)
+          cartPayload.devmasterUserId = user;
+        }
+
+        const headers: HeadersInit = {
+          'Content-Type': 'application/json',
+        };
+
+        // Adicionar Authorization header apenas se houver token
+        if (sessionToken) {
+          headers['Authorization'] = `Bearer ${sessionToken}`;
+        }
+
+        const response = await fetch('/api/carts', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(cartPayload),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || 'Erro ao adicionar item ao carrinho');
+        }
+
+        return response.json();
+      });
+
+      await Promise.all(promises);
+
+      // Limpar carrinho local após sucesso
+      clearCart();
+      alert('Pedido finalizado com sucesso!');
+      onClose();
+    } catch (err) {
+      console.error('Erro ao finalizar pedido:', err);
+      setError(err instanceof Error ? err.message : 'Erro ao finalizar pedido');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   return (
     <>
@@ -133,6 +259,13 @@ export default function CartSidebar({ isOpen, onClose }: CartSidebarProps) {
           {cart.length > 0 && (
             <div className="border-t border-[#d5d5d5] p-6 bg-white">
               <div className="space-y-4">
+                {/* Mensagem de Erro */}
+                {error && (
+                  <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+                    {error}
+                  </div>
+                )}
+
                 {/* Total */}
                 <div className="flex items-center justify-between">
                   <span className="text-gray-600 font-light">Subtotal</span>
@@ -143,12 +276,11 @@ export default function CartSidebar({ isOpen, onClose }: CartSidebarProps) {
 
                 {/* Botão Finalizar */}
                 <button
-                  className="w-full cursor-pointer bg-black text-white py-4 rounded-lg font-light text-base hover:bg-gray-800 transition-colors"
-                  onClick={() => {
-                    alert('Funcionalidade de finalização em desenvolvimento!');
-                  }}
+                  className="w-full cursor-pointer bg-black text-white py-4 rounded-lg font-light text-base hover:bg-gray-800 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
+                  onClick={handleFinalizarPedido}
+                  disabled={isSubmitting}
                 >
-                  Finalizar Pedido
+                  {isSubmitting ? 'Enviando...' : 'Finalizar Pedido'}
                 </button>
               </div>
             </div>
