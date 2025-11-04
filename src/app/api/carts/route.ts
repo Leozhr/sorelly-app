@@ -107,6 +107,18 @@ export async function POST(req: Request) {
       );
     }
 
+    // Normalizar o campo imagem para sempre ser um array de strings
+    if (variation.imagem) {
+      if (typeof variation.imagem === "string") {
+        variation.imagem = [variation.imagem];
+      } else if (!Array.isArray(variation.imagem)) {
+        return NextResponse.json(
+          { error: "O campo imagem da variação deve ser uma string ou array de strings." },
+          { status: 400 },
+        );
+      }
+    }
+
     const clientPayload = isPlainObject(body.client) ? body.client : null;
     
     // Se não houver client no payload, buscar pelo clientId quando autenticado por email
