@@ -1,6 +1,6 @@
 /**
- * Garante que a URL da imagem use HTTP ao invés de HTTPS
- * pois o servidor de imagens não suporta SSL
+ * Converte URLs de imagens externas HTTP para usar o proxy local HTTPS
+ * Isso evita problemas de mixed content (HTTP em site HTTPS)
  */
 export function ensureHttpImageUrl(url: string | null | undefined): string {
   if (!url) return '/placeholder.jpg';
@@ -10,12 +10,19 @@ export function ensureHttpImageUrl(url: string | null | undefined): string {
   
   if (!trimmedUrl) return '/placeholder.jpg';
   
-  // Se a URL já começa com https:// para o servidor de imagens, substitui por http://
-  if (trimmedUrl.startsWith('https://portalvps250.indepinfo.com.br')) {
-    return trimmedUrl.replace('https://', 'http://');
+  // Se for uma URL do servidor de imagens, usar o proxy
+  if (trimmedUrl.includes('portalvps250.indepinfo.com.br')) {
+    // Remove https:// e usa http:// para garantir protocolo correto
+    let imageUrl = trimmedUrl;
+    if (imageUrl.startsWith('https://')) {
+      imageUrl = imageUrl.replace('https://', 'http://');
+    }
+    
+    // Retorna URL do proxy com a imagem original como parâmetro
+    return `/api/image-proxy?url=${encodeURIComponent(imageUrl)}`;
   }
   
-  // Se a URL é relativa ou já está correta, retorna como está
+  // Se for URL relativa ou de outro domínio, retorna como está
   return trimmedUrl;
 }
 

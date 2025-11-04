@@ -1,16 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  images: {
-    remotePatterns: [
-      {
-        protocol: 'http',
-        hostname: 'portalvps250.indepinfo.com.br',
-        port: '28578',
-        pathname: '/imagens/produtos/**',
-      },
-    ],
-  },
+  // Configuração removida pois as imagens externas agora passam pelo proxy local
+  // Isso resolve problemas de mixed content (HTTP em site HTTPS)
 };
 
 export default nextConfig;
