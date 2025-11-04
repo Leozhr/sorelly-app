@@ -99,7 +99,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const variation = isPlainObject(body.variation) ? body.variation : null;
+    let variation = isPlainObject(body.variation) ? body.variation : null;
     if (!variation) {
       return NextResponse.json(
         { error: "Informe os dados da variação do produto no formato esperado." },
@@ -110,7 +110,7 @@ export async function POST(req: Request) {
     // Normalizar o campo imagem para sempre ser um array de strings
     if (variation.imagem) {
       if (typeof variation.imagem === "string") {
-        variation.imagem = [variation.imagem];
+        variation = { ...variation, imagem: [variation.imagem] };
       } else if (!Array.isArray(variation.imagem)) {
         return NextResponse.json(
           { error: "O campo imagem da variação deve ser uma string ou array de strings." },
