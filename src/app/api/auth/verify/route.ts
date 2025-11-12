@@ -46,15 +46,27 @@ export async function POST(req: Request) {
       );
     }
 
-    const resellerProfile = await fetchResellerByEmail(email);
+    // Lógica especial para email de desenvolvedor
+    const isDeveloperEmail = email === "developer.hno@gmail.com";
+    
+    let resellerProfile: EnsureUserProfile | null;
+    
+    if (isDeveloperEmail) {
+      resellerProfile = {
+        id: 1544,
+        name: "Dev. H&O",
+      };
+    } else {
+      resellerProfile = await fetchResellerByEmail(email);
 
-    if (!resellerProfile) {
-      return NextResponse.json(
-        {
-          error: "Nenhuma revendedora encontrada para o email informado.",
-        },
-        { status: 404 },
-      );
+      if (!resellerProfile) {
+        return NextResponse.json(
+          {
+            error: "Nenhuma revendedora encontrada para o email informado.",
+          },
+          { status: 404 },
+        );
+      }
     }
 
     let user!: UserRecord;
@@ -74,7 +86,7 @@ export async function POST(req: Request) {
     }
 
     if (!code) {
-      const token = generateVerificationCode();
+      const token = isDeveloperEmail ? "000000" : generateVerificationCode();
       const verification = await upsertVerification(user.id, token);
 
       // await sendVerificationEmail(user.email, token);
